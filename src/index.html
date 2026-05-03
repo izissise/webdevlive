@@ -6,6 +6,13 @@
   </head>
   <body>
     <main>Hello 1</main>
-    <footer><iframe id="iframe-tty" title="tty output" src="/tty"></iframe></footer>
   </body>
+  <iframe id="terminal-stream" width="100%" height="500px"></iframe>
+  <script>
+    // Wait for the parent page to completely finish loading
+    window.addEventListener('load', () => {
+        const iframe = document.getElementById('terminal-stream');
+        iframe.src = '/tty';
+    });
+  </script>
 </html>

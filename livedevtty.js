@@ -132,6 +132,42 @@ body.badge-mode #badge-container {
     document.head.appendChild(styleEl);
 })();
 
+async function loadXtermDependencies() {
+    return new Promise((resolve, reject) => {
+        // If xterm is already loaded, resolve immediately
+        if (typeof window.Terminal !== 'undefined') {
+            return resolve();
+        }
+
+        // Load CSS if not present
+        if (!document.querySelector("link[href*='xterm.css']")) {
+            const link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = 'https://cdn.jsdelivr.net/npm/@xterm/xterm/css/xterm.css';
+            document.head.appendChild(link);
+        }
+
+        // Load JS if not present
+        if (!document.querySelector("script[src*='xterm.js']")) {
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/@xterm/xterm/lib/xterm.js';
+
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error("Failed to load xterm.js from CDN"));
+
+            document.head.appendChild(script);
+        } else {
+            // The script tag exists but hasn't finished loading yet.
+            // We poll briefly until window.Terminal is available.
+            const checkReady = setInterval(() => {
+                if (typeof window.Terminal !== 'undefined') {
+                    clearInterval(checkReady);
+                    resolve();
+                }
+            }, 50);
+        }
+    });
+}
 
 // --- State & DOM References ---
 const uiState = {
@@ -154,7 +190,11 @@ function initUI() {
     if (uiState.indicator) return;
 
     uiState.indicator = document.createElement('div');
-    document.body.appendChild(uiState.indicator);
+    if (document.body.firstChild) {
+        document.body.insertBefore(uiState.indicator, document.body.firstChild);
+    } else {
+        document.body.appendChild(uiState.indicator);
+    }
 
     const favicon = document.querySelector('title')?.dataset.icon;
     if (favicon) updateFavicon(favicon);
@@ -194,19 +234,22 @@ function setupTraceSelector() {
     });
 }
 
-function setupTerminal(rawLog) {
+function setupTerminal() {
     setStatus("connected");
 
     // Create terminal DOM elements
     const host = document.createElement('div');
     host.className = 'ldt-terminal-host badge-content';
     const term = document.createElement('div');
-    term.id = rawLog.id + "-display";
+    term.id = "log-display";
     term.className = 'ldt-terminal';
     host.appendChild(term);
 
-	rawLog.parentNode.insertBefore(host, rawLog);
-    rawLog.style.display = 'none';
+    if (document.body.firstChild) {
+        document.body.insertBefore(host, document.body.firstChild);
+    } else {
+        document.body.appendChild(host);
+    }
 
     // Init xterm
     const xtermInstance = new Terminal({
@@ -242,52 +285,92 @@ function setupTerminal(rawLog) {
 
     fitToHost();
     new ResizeObserver(fitToHost).observe(term);
+    return xtermInstance;
+}
 
-    // Mutation Observer (Replaces setInterval polling)
-    let cursor = 0;
-    const updateTerminal = () => {
-        const text = rawLog.textContent;
-        const len  = text.length;
-        if (len <= cursor) return;
+async function streamToTerminal(xtermInstance, url, startMarker, webconsole) {
+    try {
+        const response = await fetch(url, { cache: 'no-store' });
+        if (!response.body) {
+            throw new Error("ReadableStream not supported in this browser.");
+        }
 
-        const newChunk = text.substring(cursor, len);
-        cursor = len;
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
 
-        // Write directly to terminal (pushBadgeLog is gone)
-        xtermInstance.write(newChunk);
-    };
+        let isSeeking = true;
+        let buffer = "";
 
-    const observer = new MutationObserver(updateTerminal);
-    observer.observe(rawLog, { childList: true, characterData: true, subtree: true });
+        while (true) {
+            const { done, value } = await reader.read();
 
-    // Initial read for anything already in the DOM
-    updateTerminal();
+            if (done) {
+                break; // Stream ended normally
+            }
+
+            let chunk = decoder.decode(value, { stream: true });
+
+            if (isSeeking) {
+                buffer += chunk;
+                const markerIndex = buffer.indexOf(startMarker);
+
+                if (markerIndex !== -1) {
+                    isSeeking = false;
+                    // Extract everything AFTER the marker and write it
+                    const contentStart = markerIndex + startMarker.length;
+                    const initialContent = buffer.substring(contentStart);
+                    if (initialContent) {
+                        xtermInstance.write(initialContent);
+                        if (webconsole) {
+                            console.log(initialContent);
+                        }
+                    }
+                    buffer = "";
+                }
+            } else {
+                xtermInstance.write(chunk);
+                if (webconsole) {
+                    console.log(chunk);
+                }
+            }
+        }
+
+        // Trigger reconnection logic when the stream closes cleanly
+        handleStreamEnd();
+
+    } catch (error) {
+        console.error("Stream interrupted or failed:", error);
+        handleStreamEnd();
+    }
 }
 
 
 // --- Lifecycle & Initialization ---
-function activateLive(id, ansi) {
+async function activateLive(id, webconsole) {
     setupTraceSelector();
 
-    const poller = setInterval(() => {
-        const rawLog = document.getElementById(id);
-        if (rawLog && !uiState.isInitialized) {
-            clearInterval(poller);
-            uiState.isInitialized = true;
-            setupTerminal(rawLog);
-        }
-    }, 20);
+    if (!document.body) {
+        document.documentElement.appendChild(document.createElement("body"));
+    }
+    await loadXtermDependencies();
+    uiState.isInitialized = true;
+    window.stop(); // Stop the browser from continuing to load the main page
+
+    // Setup the terminal UI immediately
+    const xtermInstance = setupTerminal(id);
+
+    // Call the extracted stream function
+    // You can dynamically set the startMarker based on the 'id' if needed
+    const startMarker = "<body>" + "<xmp id='log'>";
+    await streamToTerminal(xtermInstance, window.location.href, startMarker, webconsole);
 }
 
 
 function handleStreamEnd() {
     if (window.__is_navigating) return;
-    if (document.readyState === 'interactive' || document.readyState === 'complete') {
-        window.stop();
-        console.log("Stream ended. Waiting for server to restart...");
-        setStatus("disconnected");
-        return pollServerAndReload();
-    }
+    console.log("Stream ended. Waiting for server to restart...");
+    setStatus("disconnected");
+    return pollServerAndReload();
 }
 
 function pollServerAndReload() {
@@ -311,5 +394,4 @@ function pollServerAndReload() {
 }
 
 window.activateLive = activateLive;
-window.activateLiveAnsi = function(id) { window.activateLive(id, true); };
-document.addEventListener('readystatechange', handleStreamEnd);
+window.activateLiveConsole = function(id) { window.activateLive(id, true); };

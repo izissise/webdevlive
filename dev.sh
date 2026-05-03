@@ -11,7 +11,7 @@ compile_and_run() {
     if [ -t 1 ]; then color=always; fi
 
     build() { cargo build --color "$color"; } # Change for your build command
-    run()   { exec cargo run; }               # Change for your run command
+    run()   { exec ./target/debug/webdevlive; }               # Change for your run command
 
     mkdir -p target
     printf '%s\r\n' \
@@ -21,14 +21,9 @@ compile_and_run() {
       "" \
       "<!doctype html><head><meta charset='utf-8'>" \
       "<title>compiling</title>" \
-      "<link rel='preload' href='https://cdn.jsdelivr.net/npm/@xterm/xterm/css/xterm.css' as='style' />" \
-      "<link rel='preload' href='https://cdn.jsdelivr.net/npm/@xterm/xterm/lib/xterm.js' as='script' />" \
-      "<link rel='preload' href='https://blog.izissise.net/posts/webdev-livecompile/livedevtty.js' as='script' />" \
-      "<style src='https://cdn.jsdelivr.net/npm/@xterm/xterm/css/xterm.css'><style>" \
-      "<script src='https://cdn.jsdelivr.net/npm/@xterm/xterm/lib/xterm.js'></script>" \
-      "<script src='https://blog.izissise.net/posts/webdev-livecompile/livedevtty.js'></script>" \
+      "<script src='https://cdn.jsdelivr.net/gh/izissise/webdevlive@refs/heads/main/livedevtty.js'></script>" \
       "<script>activateLive('log')</script>" \
-      "<body><xmp id='log' data-date='$(date +%s)'>" \
+      "<body><xmp id='log'>" \
     > "$tty_log_file"
 
     socatpid=()

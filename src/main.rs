@@ -9,17 +9,28 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
+    tokio::spawn(async {
+        let mut counter = 0;
+        loop {
+            // Wait for 5 seconds without blocking the thread
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            counter += 1;
+            println!("alive: {counter}");
+        }
+    });
+
     let router = axum::Router::new()
         .route("/index.html", routing::get(index))
         .route("/tty", routing::get(tty))
         .fallback(routing::get(|| async {
             axum::response::Redirect::to("/index.html")
         }));
+
     axum_run(apply_livereload(router).expect("router"))
         .await
         .expect("error");
 }
-ss
+
 async fn index() -> Result<impl IntoResponse, impl IntoResponse> {
     let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("src")
@@ -44,8 +55,14 @@ async fn tty() -> Result<impl IntoResponse, impl IntoResponse> {
         .await
         .map_err(|e| format!("Failed to open log file: {e}"))?;
     let _n = file.read(&mut buf[..]).await.expect("read");
-    let p = buf.windows(4).position(|w| w == b"\r\n\r\n").expect("header sep");
-    let _s = file.seek(std::io::SeekFrom::Start((p + 4) as u64)); // seek to after http header
+    let p = buf
+        .windows(4)
+        .position(|w| w == b"\r\n\r\n")
+        .expect("header sep");
+    let _s = file
+        .seek(std::io::SeekFrom::Start((p + 4) as u64))
+        .await
+        .expect("seek"); // seek to after http header
     let stream = futures::stream::unfold(file, move |mut file| async move {
         let out = match file.read(&mut buf[..]).await {
             Ok(n) => (buf[..n]).to_vec(),
