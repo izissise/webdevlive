@@ -1,4 +1,3 @@
-use anyhow::Result;
 use axum::{
     body::Body,
     http::StatusCode,
@@ -73,12 +72,12 @@ async fn tty() -> Result<impl IntoResponse, impl IntoResponse> {
     Ok::<_, String>((StatusCode::ACCEPTED, Html(Body::from_stream(stream))))
 }
 
-async fn axum_run(router: axum::Router) -> Result<()> {
-    fn listen_fd() -> Result<Vec<tokio::net::TcpListener>> {
+async fn axum_run(router: axum::Router) -> Result<(), String> {
+    fn listen_fd() -> Result<Vec<tokio::net::TcpListener>, String> {
         let mut res = Vec::new();
         let mut idx = 0;
         let mut lfd = listenfd::ListenFd::from_env();
-        while let Some(s) = lfd.take_tcp_listener(idx)? {
+        while let Some(s) = lfd.take_tcp_listener(idx).map_err(|e| e.to_string())? {
             s.set_nonblocking(true).expect("couldn't set non blocking");
             res.push(tokio::net::TcpListener::from_std(s).expect("transform failed"));
             idx += 1;
@@ -89,7 +88,11 @@ async fn axum_run(router: axum::Router) -> Result<()> {
     let listeners = listen_fd()?;
     let listeners = match listeners.is_empty() {
         true => {
-            vec![tokio::net::TcpListener::bind("[::0]:8008").await?]
+            vec![
+                tokio::net::TcpListener::bind("[::0]:8008")
+                    .await
+                    .map_err(|e| e.to_string())?,
+            ]
         }
         false => listeners,
     };
@@ -111,11 +114,13 @@ async fn axum_run(router: axum::Router) -> Result<()> {
             .await
         }
     });
-    futures::future::try_join_all(servers).await?;
+    futures::future::try_join_all(servers)
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
-fn apply_livereload(router: axum::Router) -> anyhow::Result<axum::Router> {
+fn apply_livereload(router: axum::Router) -> Result<axum::Router, String> {
     use notify::Watcher;
 
     const LIVE_RELOAD_IGNORED_EXT: &[&str] = &["kate-swp", "~"];
@@ -169,8 +174,8 @@ fn apply_livereload(router: axum::Router) -> anyhow::Result<axum::Router> {
     println!("livereload watching {}", &path.display());
     let lr = tower_livereload::LiveReloadLayer::new().inject_payload(ssejs);
     let reloader = lr.reloader();
-    let mut watcher = Box::new(notify::recommended_watcher(
-        move |result: Result<notify::Event, _>| {
+    let mut watcher = Box::new(
+        notify::recommended_watcher(move |result: Result<notify::Event, _>| {
             // filters
             if result
                 .map(|e| {
@@ -185,10 +190,13 @@ fn apply_livereload(router: axum::Router) -> anyhow::Result<axum::Router> {
             {
                 reloader.reload();
             }
-        },
-    )?);
+        })
+        .map_err(|e| e.to_string())?,
+    );
 
-    watcher.watch(&path, notify::RecursiveMode::Recursive)?;
+    watcher
+        .watch(&path, notify::RecursiveMode::Recursive)
+        .map_err(|e| e.to_string())?;
     Box::leak(watcher); // leave the watcher thread in the background
     Ok(router.layer(lr))
 }

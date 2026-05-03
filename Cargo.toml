@@ -4,14 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = "1"
-notify = "8"
-listenfd = "1"
-tokio = { version = "1", features = ["macros", "signal", "rt", "sync", "process", "fs", "io-util"] }
-tower = { version = "0.5", features = ["util", "timeout", "limit", "make"] }
-tower-livereload = { git = "https://github.com/izissise/tower-livereload.git", branch = "custom-js" }
-futures = "0.3"
 axum = "0.8"
-axum-extra = { version = "0.12", default-features = false, features = [
-	"async-read-body",
-]}
+futures = "0.3"
+listenfd = "1"
+notify = "8"
+tokio = { version = "1", features = ["macros", "signal", "rt", "sync", "process", "fs", "io-util"] }
+tower-livereload = { git = "https://github.com/izissise/tower-livereload.git", branch = "custom-js" }
