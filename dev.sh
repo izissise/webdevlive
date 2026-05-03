@@ -22,8 +22,8 @@ compile_and_run() {
       "<!doctype html><head><meta charset='utf-8'>" \
       "<title>compiling</title>" \
       "<script src='https://cdn.jsdelivr.net/gh/izissise/webdevlive@refs/heads/main/livedevtty.js'></script>" \
-      "<script>activateLive('log')</script>" \
-      "<body><xmp id='log'>" \
+      "<script>activateLive()</script>" \
+      "<body><xmp>" \
     > "$tty_log_file"
 
     socatpid=()

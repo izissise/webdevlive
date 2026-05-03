@@ -346,7 +346,7 @@ async function streamToTerminal(xtermInstance, url, startMarker, webconsole) {
 
 
 // --- Lifecycle & Initialization ---
-async function activateLive(id, webconsole) {
+async function activateLive(webconsole) {
     setupTraceSelector();
 
     if (!document.body) {
@@ -357,11 +357,9 @@ async function activateLive(id, webconsole) {
     window.stop(); // Stop the browser from continuing to load the main page
 
     // Setup the terminal UI immediately
-    const xtermInstance = setupTerminal(id);
+    const xtermInstance = setupTerminal();
 
-    // Call the extracted stream function
-    // You can dynamically set the startMarker based on the 'id' if needed
-    const startMarker = "<body>" + "<xmp id='log'>";
+    const startMarker = "<body>" + "<xmp>";
     await streamToTerminal(xtermInstance, window.location.href, startMarker, webconsole);
 }
 
@@ -394,4 +392,4 @@ function pollServerAndReload() {
 }
 
 window.activateLive = activateLive;
-window.activateLiveConsole = function(id) { window.activateLive(id, true); };
+window.activateLiveConsole = function() { window.activateLive(true); };
