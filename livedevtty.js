@@ -295,6 +295,15 @@ async function streamToTerminal(xtermInstance, url, startMarker, webconsole) {
             throw new Error("ReadableStream not supported in this browser.");
         }
 
+        const customTitle = response.headers.get('title') || response.headers.get('x-title');
+        if (customTitle) {
+            document.title = customTitle;
+            const badgeElement = document.getElementById('b-st');
+            if (badgeElement) {
+                badgeElement.textContent = customTitle;
+            }
+        }
+
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
 
@@ -346,12 +355,12 @@ async function streamToTerminal(xtermInstance, url, startMarker, webconsole) {
 
 
 // --- Lifecycle & Initialization ---
-async function activateLive(webconsole) {
-    setupTraceSelector();
-
+async function activateLive(webconsole, usrstartMarker) {
     if (!document.body) {
         document.documentElement.appendChild(document.createElement("body"));
     }
+    setupTraceSelector();
+
     await loadXtermDependencies();
     uiState.isInitialized = true;
     window.stop(); // Stop the browser from continuing to load the main page
@@ -359,7 +368,7 @@ async function activateLive(webconsole) {
     // Setup the terminal UI immediately
     const xtermInstance = setupTerminal();
 
-    const startMarker = "<body>" + "<xmp>";
+    const startMarker = usrstartMarker || "<body>" + "<xmp>";
     await streamToTerminal(xtermInstance, window.location.href, startMarker, webconsole);
 }
 
@@ -392,4 +401,4 @@ function pollServerAndReload() {
 }
 
 window.activateLive = activateLive;
-window.activateLiveConsole = function() { window.activateLive(true); };
+window.activateLiveConsole = function(a) { window.activateLive(true, a); };
