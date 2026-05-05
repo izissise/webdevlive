@@ -304,6 +304,11 @@ async function streamToTerminal(xtermInstance, url, startMarker, webconsole) {
             }
         }
 
+        const xmpTags = document.getElementsByTagName('xmp');
+        for (let i = 0; i < xmpTags.length; i++) {
+            xmpTags[i].style.display = 'none';
+        }
+
         const reader = response.body.getReader();
         const decoder = new TextDecoder('utf-8');
 
