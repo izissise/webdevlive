@@ -2,6 +2,7 @@
 
 command -v systemfd &>/dev/null  || { echo "missing systemfd https://github.com/mitsuhiko/systemfd";   exit 1; }
 command -v watchexec &>/dev/null || { echo "missing watchexec https://github.com/watchexec/watchexec"; exit 1; }
+command -v socat &>/dev/null || { echo "missing socat"; exit 1; }
 
 compile_and_run() {
     set -eu
@@ -59,8 +60,8 @@ systemfd \
   --shell=bash --quiet \
   --restart --clear --debounce 2s --notify \
   --exts rs --watch Cargo.toml --watch src/ \
-  --env LISTENING_PORT=${LISTENING_PORT:-8000} \
-  --env RUST_LOG=${RUST_LOG:-debug} \
-  --env TTY_LOG_FILE=${TTY_LOG_FILE:-target/buildandrun.log} \
+  --env LISTENING_PORT="${LISTENING_PORT:-8000}" \
+  --env RUST_LOG="${RUST_LOG:-debug}" \
+  --env TTY_LOG_FILE="${TTY_LOG_FILE:-target/buildandrun.log}" \
   -- "$(declare -f compile_and_run); compile_and_run";
 
